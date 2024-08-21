@@ -1,68 +1,95 @@
 from langgraph.graph import StateGraph, START, END
 from main.agent.graph.state import GraphState
 #from constants.consts import LOAD_JSON, QUERY, VALIDATE
-from main.agent.graph.nodes import load_json, query_json, validate_node, query_json_dataframe_chain, query_dataframe, fix_dataframe_query
 from langchain_core.runnables import RunnablePassthrough
+from main.agent.graph.nodes import (
+    validate_node,
+    search_insight_node,
+    save_insight_node,
+    re_search_doc_node,
+    extract_insight_node,
+    feed_back_node,
+    extract_doc_info_node)
 
-QUERY = "query"
-VALIDATION = "validation"
-LOAD_JSON = "load_json"
-RUN = "run"
+EXTRACT_DOC_INFO = "extract_doc_info"
+EXTRACT_INSIGHT = "extract_insight"
+FEED_BACK = "feed_back"
+RE_SEARCH_DOC = "re_search_doc"
+SAVE_INSIGHT = "save_insight"
+SEARCH_INSIGHT = "search_insight"
+VALIDATE = "validate"
 
 
-def validation_condition(state: GraphState):
+def insight_search_result_cond(state: GraphState):
     validation_value = state["valid_result"]
-    if "valid" in validation_value:
-        return RUN
+    if "not found" in validation_value:
+        return RE_SEARCH_DOC
     else:
-        return QUERY
-    
-def check_error(state: GraphState):
-    print("tttttttttttttttttttttttttttttt")
-    result = state["result"]
-    if "error" in result or "Error" in result:
-        print("tttttttttttttttttttttttttttttt1=",result,"//Generated Query=",state["generated_query"])
-        return "fix_error"
+        return FEED_BACK
+
+
+def feed_back_result_cond(state: GraphState):
+    validation_value = state["valid_result"]
+    if "not found" in validation_value:
+        return EXTRACT_DOC_INFO
     else:
-        print("tttttttttttttttttttttttttttttt2")
+        print("---END---")
         return "end"
+
+
+def doc_search_result_cond(state: GraphState):
+    validation_value = state["valid_result"]
+    if "not found" in validation_value:
+        return FEED_BACK
+    else:
+        return SEARCH_INSIGHT
 
 
 # Init graph
 graph_builder = StateGraph(GraphState)
 
 # Init nodes
-graph_builder.add_node(LOAD_JSON, load_json)
-graph_builder.add_node(QUERY, query_json_dataframe_chain)
-graph_builder.add_node("run", query_dataframe)
-graph_builder.add_node(VALIDATION, validate_node)
-graph_builder.add_node("check_error", RunnablePassthrough())
-graph_builder.add_node("fix_query", fix_dataframe_query)
+graph_builder.add_node(EXTRACT_DOC_INFO, extract_doc_info_node)
+graph_builder.add_node(EXTRACT_INSIGHT, extract_insight_node)
+graph_builder.add_node(SAVE_INSIGHT, save_insight_node)
+graph_builder.add_node(SEARCH_INSIGHT, search_insight_node)
+graph_builder.add_node(FEED_BACK, feed_back_node)
+graph_builder.add_node(RE_SEARCH_DOC, re_search_doc_node)
 
 # Add Edges
-graph_builder.set_entry_point(LOAD_JSON)
-graph_builder.add_edge(LOAD_JSON, QUERY)
-graph_builder.add_edge(QUERY, VALIDATION)
-graph_builder.add_conditional_edges(
-    VALIDATION,
-    validation_condition,
-    {
-        "run": RUN,
-        "query": QUERY
-    }
-)
-graph_builder.add_edge(RUN, "check_error")
-graph_builder.add_conditional_edges(
-    "check_error",
-    check_error,
-    {
-        "fix_error": "fix_query",
-        "end" : END
-    }
-)
-graph_builder.add_edge("fix_query", RUN)
+graph_builder.set_entry_point(EXTRACT_DOC_INFO)
+graph_builder.add_edge(EXTRACT_DOC_INFO, EXTRACT_INSIGHT)
+graph_builder.add_edge(EXTRACT_INSIGHT, SAVE_INSIGHT)
+graph_builder.add_edge(SAVE_INSIGHT, SEARCH_INSIGHT)
 
+
+graph_builder.add_conditional_edges(
+    SEARCH_INSIGHT,
+    insight_search_result_cond,
+    {
+        "re_search_doc": RE_SEARCH_DOC,
+        "feed_back": FEED_BACK
+    }
+)
+
+graph_builder.add_conditional_edges(
+    FEED_BACK,
+    feed_back_result_cond,
+    {
+        "extract_doc_info": EXTRACT_DOC_INFO,
+        "end": END
+    }
+)
+
+graph_builder.add_conditional_edges(
+    RE_SEARCH_DOC,
+    doc_search_result_cond,
+    {
+        "feed_back": FEED_BACK,
+        "search_insight": SEARCH_INSIGHT
+    }
+)
 
 # compile graph
 graph = graph_builder.compile()
-graph.get_graph().draw_mermaid_png(output_file_path="graph_3.png")
+graph.get_graph().draw_mermaid_png(output_file_path="resources/graph.png")

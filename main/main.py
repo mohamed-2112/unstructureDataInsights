@@ -14,8 +14,7 @@ def main():
     """
     load_environment()
     print("Hello and welcome to the application!")
-    result = agent_runner()
-    print("results =====", result)
+    agent_runner()
 
 
 def load_environment():
