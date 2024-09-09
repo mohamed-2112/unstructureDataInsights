@@ -1,0 +1,9 @@
+{
+	"image": "mcr.microsoft.com/devcontainers/universal:2",
+	"features": {
+		"ghcr.io/devcontainers-contrib/features/black:2": {}
+	},
+    "postStartCommand": {
+        "install_requirments": "pip install --no-cache-dir -r requirements.txt"
+      }
+}
